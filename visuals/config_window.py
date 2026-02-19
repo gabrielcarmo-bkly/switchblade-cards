@@ -151,8 +151,7 @@ class TkController:
 
                 button_row = ttk.Frame(container)
                 button_row.pack(fill=tk.X, pady=(8, 2))
-                # ttk.Button(button_row, text="Sair", command=win.withdraw).pack(side=tk.RIGHT)
-                ttk.Button(button_row, text="Salvar", command=self._save_and_close).pack(side=tk.RIGHT, pa)
+                ttk.Button(button_row, text="Salvar", command=self._save_and_close).pack(side=tk.RIGHT, padx=(0, 8))
 
                 self._load_config()
 
