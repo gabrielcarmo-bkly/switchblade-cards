@@ -1,0 +1,40 @@
+[2026-02-19 10:33:22] Request exception
+Environment: PRD
+URL: https://login.bankly.com.br/connect/token
+Error: HTTPSConnectionPool(host='login.bankly.com.br', port=443): Max retries exceeded with url: /connect/token (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1032)')))
+Request Curl:
+curl --location 'https://login.bankly.com.br/connect/token' --header 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'client_id=a1e71149-0f7e-4e55-ac6b-5b4f43c8920b' --data-urlencode 'client_secret=2014e697-2444-0ea6-8965-c6ff7eac13a7' --data-urlencode 'grant_type=client_credentials'
+------------------------------------------------------------
+
+[2026-02-19 10:02:55] Request exception
+Environment: PRD
+URL: https://login.bankly.com.br/connect/token
+Error: HTTPSConnectionPool(host='login.bankly.com.br', port=443): Max retries exceeded with url: /connect/token (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1032)')))
+Request Curl:
+curl --location 'https://login.bankly.com.br/connect/token' --header 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'client_id=a1e71149-0f7e-4e55-ac6b-5b4f43c8920b' --data-urlencode 'client_secret=2014e697-2444-0ea6-8965-c6ff7eac13a7' --data-urlencode 'grant_type=client_credentials'
+------------------------------------------------------------
+
+[2026-02-19 09:50:52] Request exception
+Environment: PRD
+URL: https://login.bankly.com.br/connect/token
+Error: HTTPSConnectionPool(host='login.bankly.com.br', port=443): Max retries exceeded with url: /connect/token (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1032)')))
+Request Curl:
+curl --location 'https://login.bankly.com.br/connect/token' --header 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'client_id=a1e71149-0f7e-4e55-ac6b-5b4f43c8920b' --data-urlencode 'client_secret=2014e697-2444-0ea6-8965-c6ff7eac13a7' --data-urlencode 'grant_type=client_credentials'
+------------------------------------------------------------
+
+[2026-02-19 09:49:36] Request exception
+Environment: PRD
+URL: https://login.bankly.com.br/connect/token
+Error: HTTPSConnectionPool(host='login.bankly.com.br', port=443): Max retries exceeded with url: /connect/token (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1032)')))
+Request Curl:
+curl --location 'https://login.bankly.com.br/connect/token' --header 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'client_id=a1e71149-0f7e-4e55-ac6b-5b4f43c8920b' --data-urlencode 'client_secret=2014e697-2444-0ea6-8965-c6ff7eac13a7' --data-urlencode 'grant_type=client_credentials' --cacert 'C:/certs/Netskope_Bankly.crt'
+------------------------------------------------------------
+
+[2026-02-19 09:49:31] Request exception
+Environment: STG
+URL: https://login.staging.bankly.com.br/connect/token
+Error: HTTPSConnectionPool(host='login.staging.bankly.com.br', port=443): Max retries exceeded with url: /connect/token (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1032)')))
+Request Curl:
+curl --location 'https://login.staging.bankly.com.br/connect/token' --header 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'client_id=5936cd12-f39a-4e02-95f0-5a902ae4c53c' --data-urlencode 'client_secret=8199dc62-5735-fd58-e71e-60d65a61fd95' --data-urlencode 'grant_type=client_credentials' --cacert 'C:/certs/Netskope_Bankly.crt'
+------------------------------------------------------------
+

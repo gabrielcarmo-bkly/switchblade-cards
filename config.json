@@ -1,0 +1,19 @@
+{
+  "cert_path": "",
+  "auto_start": false,
+  "PRD": {
+    "url": "",
+    "client_id": "",
+    "client_secret": ""
+  },
+  "SDB": {
+    "url": "",
+    "client_id": "",
+    "client_secret": ""
+  },
+  "STG": {
+    "url": "",
+    "client_id": "",
+    "client_secret": ""
+  }
+}
