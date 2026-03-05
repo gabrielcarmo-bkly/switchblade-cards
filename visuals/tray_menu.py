@@ -69,6 +69,8 @@ class TrayApp:
             pystray.MenuItem("Gerar UUID", lambda _icon, _item: self.tk_controller.generate_uuid()),
             pystray.MenuItem("Gerar CPF", lambda _icon, _item: self.tk_controller.generate_cpf()),
             pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Marcar Ponto", lambda _icon, _item: self.tk_controller.schedule_time_entry_reminder()),
+            pystray.Menu.SEPARATOR,
             pystray.MenuItem("Configuracoes", lambda _icon, _item: self.tk_controller.show_config()),
             pystray.MenuItem("Ver Logs", lambda _icon, _item: self._open_logs()),
             pystray.MenuItem("Sair", lambda _icon, _item: self.quit()),

@@ -4,7 +4,7 @@ import threading
 import tkinter as tk
 import winreg
 from pathlib import Path
-from tkinter import filedialog, ttk
+from tkinter import filedialog, messagebox, ttk
 
 from PIL import Image, ImageTk
 
@@ -35,6 +35,8 @@ class TkController:
         self.cpf_punctuation_var = None
         self._notifier = None
         self._header_icon = None
+        self._time_entry_timer = None
+        self._time_entry_window = None
         self._ready = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
@@ -193,6 +195,82 @@ class TkController:
             self.config_window.focus_force()
 
         self._call(_show)
+
+    def schedule_time_entry_reminder(self, delay_seconds=3600):
+        def _schedule():
+            if self._time_entry_timer is not None and self._time_entry_timer.is_alive():
+                self._time_entry_timer.cancel()
+
+            def _fire():
+                self._call(self._show_time_entry_popup)
+
+            timer = threading.Timer(delay_seconds, _fire)
+            timer.daemon = True
+            self._time_entry_timer = timer
+            timer.start()
+            self._notify("Marcar Ponto", "Lembrete agendado para daqui a 1 hora.")
+
+        self._call(_schedule)
+
+    def _show_time_entry_popup(self):
+        if self.root is None:
+            return
+
+        if self._time_entry_window is not None and self._time_entry_window.winfo_exists():
+            self._time_entry_window.lift()
+            self._time_entry_window.focus_force()
+            return
+
+        win = tk.Toplevel(self.root)
+        win.title("Marcar Ponto")
+        win.geometry("360x200")
+        win.transient(self.root)
+
+        container = ttk.Frame(win, padding=12)
+        container.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(
+            container,
+            text="Hora de confirmar a marcacao de ponto.",
+            font=("Segoe UI", 10, "bold"),
+            wraplength=320,
+        ).pack(anchor=tk.W, pady=(0, 10))
+
+        confirm_var = tk.BooleanVar(value=False)
+
+        def _toggle_state(*_args):
+            close_button.config(state=tk.NORMAL if confirm_var.get() else tk.DISABLED)
+
+        confirm_var.trace_add("write", _toggle_state)
+        ttk.Checkbutton(
+            container,
+            text="Confirmar marcacao de ponto",
+            variable=confirm_var,
+        ).pack(anchor=tk.W)
+
+        button_row = ttk.Frame(container)
+        button_row.pack(fill=tk.X, pady=(16, 0))
+
+        def _close_if_confirmed():
+            if confirm_var.get():
+                win.destroy()
+                return
+            messagebox.showwarning("Marcar Ponto", "Marque a confirmacao para fechar.")
+
+        close_button = ttk.Button(button_row, text="Fechar", command=_close_if_confirmed, state=tk.DISABLED)
+        close_button.pack(side=tk.RIGHT)
+
+        def _on_close():
+            if confirm_var.get():
+                win.destroy()
+                return
+            messagebox.showwarning("Marcar Ponto", "Marque a confirmacao para fechar.")
+
+        win.protocol("WM_DELETE_WINDOW", _on_close)
+        win.lift()
+        win.focus_force()
+
+        self._time_entry_window = win
 
     def _browse_cert(self):
         if self.root is None:
