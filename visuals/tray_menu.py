@@ -1,15 +1,14 @@
 import json
+import threading
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
-import win32api
-import win32con
-import win32gui
+import pystray
+from winotify import Notification
 
 from functions.app_logging import open_log_file
 
 ASSETS_DIR = Path(__file__).resolve().parent / "icons"
-CACHE_DIR = ASSETS_DIR / "_cache"
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.json"
 
 
@@ -46,128 +45,34 @@ def ensure_tray_icon():
     return icon_path
 
 
-def load_menu_bitmap(file_name, size=16):
-    src_path = ASSETS_DIR / file_name
-    if not src_path.exists():
-        return None
-
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    cache_path = CACHE_DIR / f"{src_path.stem}_{size}.bmp"
-    if not cache_path.exists():
-        icon = Image.open(src_path).convert("RGBA").resize((size, size), Image.LANCZOS)
-        background = Image.new("RGB", (size, size), (255, 255, 255))
-        background.paste(icon, mask=icon.split()[3])
-        background.save(cache_path, format="BMP")
-
-    hbm = win32gui.LoadImage(
-        0,
-        str(cache_path),
-        win32con.IMAGE_BITMAP,
-        size,
-        size,
-        win32con.LR_LOADFROMFILE,
-    )
-    return hbm
-
-
 class TrayApp:
-    WM_TRAYICON = win32con.WM_USER + 20
-    ID_TOKEN_PRD = 1001
-    ID_TOKEN_SDB = 1002
-    ID_TOKEN_STG = 1003
-    ID_UUID = 1004
-    ID_CONFIG = 1005
-    ID_LOGS = 1006
-    ID_EXIT = 1007
-
     _required_fields = ("url", "client_id", "client_secret")
 
     def __init__(self, tk_controller):
         self.tk_controller = tk_controller
-        self.hwnd = None
-        self._hicon = None
-        self._bitmaps = []
-        self._actions = {}
-        self._register_window()
-        self._create_tray_icon()
+        self._icon = None
+        self._toast_app_id = "SwitchBlade Card"
+        self._icon_path = ensure_tray_icon()
+        self._icon_image = Image.open(self._icon_path)
+        self._icon_lock = threading.Lock()
         self.tk_controller.set_notifier(self.show_notification)
 
-    def _register_window(self):
-        wc = win32gui.WNDCLASS()
-        wc.lpszClassName = "SwitchBladeCardTrayWindow"
-        wc.lpfnWndProc = self._wnd_proc
-        win32gui.RegisterClass(wc)
-        self.hwnd = win32gui.CreateWindow(
-            wc.lpszClassName,
-            "SwitchBladeCardTray",
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            win32gui.GetModuleHandle(None),
-            None,
-        )
-
-    def _create_tray_icon(self):
-        icon_path = ensure_tray_icon()
-        self._hicon = win32gui.LoadImage(
-            0,
-            str(icon_path),
-            win32con.IMAGE_ICON,
-            0,
-            0,
-            win32con.LR_LOADFROMFILE | win32con.LR_DEFAULTSIZE,
-        )
-
-        flags = win32gui.NIF_ICON | win32gui.NIF_MESSAGE | win32gui.NIF_TIP
-        nid = (self.hwnd, 0, flags, self.WM_TRAYICON, self._hicon, "SwitchBlade Card")
-        win32gui.Shell_NotifyIcon(win32gui.NIM_ADD, nid)
-
     def _create_menu(self):
-        self._actions = {
-            self.ID_TOKEN_PRD: lambda: self.tk_controller.generate_token("PRD"),
-            self.ID_TOKEN_SDB: lambda: self.tk_controller.generate_token("SDB"),
-            self.ID_TOKEN_STG: lambda: self.tk_controller.generate_token("STG"),
-            self.ID_UUID: self.tk_controller.generate_uuid,
-            self.ID_CONFIG: self.tk_controller.show_config,
-            self.ID_LOGS: self._open_logs,
-            self.ID_EXIT: self.quit,
-        }
-
-        menu = win32gui.CreatePopupMenu()
-
-        win32gui.AppendMenu(menu, win32con.MF_STRING, self.ID_TOKEN_PRD, "Gerar Token PRD")
-        win32gui.AppendMenu(menu, win32con.MF_STRING, self.ID_TOKEN_SDB, "Gerar Token SDB")
-        win32gui.AppendMenu(menu, win32con.MF_STRING, self.ID_TOKEN_STG, "Gerar Token STG")
-        win32gui.AppendMenu(menu, win32con.MF_SEPARATOR, 0, "")
-        win32gui.AppendMenu(menu, win32con.MF_STRING, self.ID_UUID, "Gerar UUID")
-        win32gui.AppendMenu(menu, win32con.MF_SEPARATOR, 0, "")
-        win32gui.AppendMenu(menu, win32con.MF_STRING, self.ID_CONFIG, "Configuracoes")
-        win32gui.AppendMenu(menu, win32con.MF_STRING, self.ID_LOGS, "Ver Logs")
-        win32gui.AppendMenu(menu, win32con.MF_STRING, self.ID_EXIT, "Sair")
-
-        self._apply_env_enabled(menu, self.ID_TOKEN_PRD, "PRD")
-        self._apply_env_enabled(menu, self.ID_TOKEN_SDB, "SDB")
-        self._apply_env_enabled(menu, self.ID_TOKEN_STG, "STG")
-
-        self._set_menu_icon(menu, self.ID_TOKEN_PRD, "circle_green.png")
-        self._set_menu_icon(menu, self.ID_TOKEN_SDB, "circle_yellow.png")
-        self._set_menu_icon(menu, self.ID_TOKEN_STG, "circle_red.png")
-        self._set_menu_icon(menu, self.ID_UUID, "numbers_1234.png")
-        self._set_menu_icon(menu, self.ID_CONFIG, "wrench.png")
-        self._set_menu_icon(menu, self.ID_LOGS, "documents.png")
-        self._set_menu_icon(menu, self.ID_EXIT, "close.png")
-
-        return menu
-
-    def _apply_env_enabled(self, menu, item_id, env_name):
-        if self._is_env_ready(env_name):
-            win32gui.EnableMenuItem(menu, item_id, win32con.MF_BYCOMMAND | win32con.MF_ENABLED)
-        else:
-            win32gui.EnableMenuItem(menu, item_id, win32con.MF_BYCOMMAND | win32con.MF_GRAYED)
+        return pystray.Menu(
+            pystray.MenuItem("Gerar Token PRD", lambda _icon, _item: self.tk_controller.generate_token("PRD"),
+                             enabled=lambda _item: self._is_env_ready("PRD")),
+            pystray.MenuItem("Gerar Token SDB", lambda _icon, _item: self.tk_controller.generate_token("SDB"),
+                             enabled=lambda _item: self._is_env_ready("SDB")),
+            pystray.MenuItem("Gerar Token STG", lambda _icon, _item: self.tk_controller.generate_token("STG"),
+                             enabled=lambda _item: self._is_env_ready("STG")),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Gerar UUID", lambda _icon, _item: self.tk_controller.generate_uuid()),
+            pystray.MenuItem("Gerar CPF", lambda _icon, _item: self.tk_controller.generate_cpf()),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Configuracoes", lambda _icon, _item: self.tk_controller.show_config()),
+            pystray.MenuItem("Ver Logs", lambda _icon, _item: self._open_logs()),
+            pystray.MenuItem("Sair", lambda _icon, _item: self.quit()),
+        )
 
     def _is_env_ready(self, env_name):
         data = self._load_config()
@@ -187,90 +92,34 @@ class TrayApp:
         except json.JSONDecodeError:
             return {}
 
-    def _set_menu_icon(self, menu, item_id, file_name):
-        hbm = load_menu_bitmap(file_name)
-        if hbm is not None:
-            win32gui.SetMenuItemBitmaps(menu, item_id, win32con.MF_BYCOMMAND, hbm, hbm)
-            self._bitmaps.append(hbm)
-
     def _open_logs(self):
         try:
             open_log_file()
         except Exception as exc:
             self.show_notification("Logs", str(exc), level="error")
 
-    def _show_menu(self):
-        menu = self._create_menu()
-        pos = win32gui.GetCursorPos()
-        win32gui.SetForegroundWindow(self.hwnd)
-        win32gui.TrackPopupMenu(
-            menu,
-            win32con.TPM_LEFTALIGN | win32con.TPM_RIGHTBUTTON,
-            pos[0],
-            pos[1],
-            0,
-            self.hwnd,
-            None,
-        )
-        win32gui.PostMessage(self.hwnd, win32con.WM_NULL, 0, 0)
-
-    def _on_command(self, wparam):
-        cmd_id = win32api.LOWORD(wparam)
-        action = self._actions.get(cmd_id)
-        if action:
-            action()
-        return 0
-
-    def _on_tray_notify(self, lparam):
-        if lparam == win32con.WM_RBUTTONUP:
-            self._show_menu()
-            return 0
-        if lparam == win32con.WM_LBUTTONDBLCLK:
-            self.tk_controller.show_config()
-            return 0
-        return 0
-
-    def _wnd_proc(self, hwnd, msg, wparam, lparam):
-        if msg == self.WM_TRAYICON:
-            return self._on_tray_notify(lparam)
-        if msg == win32con.WM_COMMAND:
-            return self._on_command(wparam)
-        if msg == win32con.WM_DESTROY:
-            win32gui.PostQuitMessage(0)
-            return 0
-        return win32gui.DefWindowProc(hwnd, msg, wparam, lparam)
-
     def show_notification(self, title, message, level="info"):
-        if not self.hwnd:
-            return
+        def _notify():
+            try:
+                toast = Notification(
+                    app_id=self._toast_app_id,
+                    title=title,
+                    msg=message,
+                    icon=str(self._icon_path),
+                )
+                toast.show()
+            except Exception:
+                pass
 
-        info_flag = getattr(win32con, "NIIF_INFO", 0x1)
-        if level == "error":
-            info_flag = getattr(win32con, "NIIF_ERROR", 0x3)
-
-        flags = win32gui.NIF_INFO
-        nid = (
-            self.hwnd,
-            0,
-            flags,
-            0,
-            0,
-            "",
-            message,
-            5000,
-            title,
-            info_flag,
-        )
-        win32gui.Shell_NotifyIcon(win32gui.NIM_MODIFY, nid)
+        threading.Thread(target=_notify, daemon=True).start()
 
     def quit(self):
-        win32gui.Shell_NotifyIcon(win32gui.NIM_DELETE, (self.hwnd, 0))
-        if self._hicon:
-            win32gui.DestroyIcon(self._hicon)
-        for hbm in self._bitmaps:
-            win32gui.DeleteObject(hbm)
+        if self._icon is not None:
+            with self._icon_lock:
+                self._icon.stop()
         self.tk_controller.shutdown()
-        win32gui.PostQuitMessage(0)
 
     def run(self):
-        win32gui.PumpMessages()
+        menu = self._create_menu()
+        self._icon = pystray.Icon("SwitchBladeCard", self._icon_image, "SwitchBlade Card", menu)
+        self._icon.run()

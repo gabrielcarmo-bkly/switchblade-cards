@@ -4,7 +4,7 @@ SwitchBlade Card is a Windows tray app for generating OAuth tokens for multiple 
 
 ## Features
 
-- Tray menu actions for PRD, SDB, STG tokens and UUID generation
+- Tray menu actions for PRD, SDB, STG tokens, UUID, and CPF generation
 - Configuration window with environment settings
 - Optional custom CA bundle path for HTTPS verification
 - Tray notifications and human-readable HTTP logs
@@ -37,6 +37,7 @@ Open the tray menu and click "Configuracoes" to set:
 - Client Secret
 - CA Bundle Path (optional)
 - Start with Windows
+- CPF formatting (with or without punctuation)
 
 Settings are stored in `config.json`. HTTP failures are logged in `logs/http.log` (newest entries at the top).
 

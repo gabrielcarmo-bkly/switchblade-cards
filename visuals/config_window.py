@@ -8,6 +8,7 @@ from tkinter import filedialog, ttk
 
 from PIL import Image, ImageTk
 
+from functions.generate_cpf import generate_cpf_to_clipboard
 from functions.generate_uuid import generate_uuid_to_clipboard
 from functions.token_generator import generate_token
 
@@ -29,7 +30,9 @@ class TkController:
         self.config_window = None
         self.entries = {}
         self.cert_path_entry = None
+        self.cert_env_vars = {}
         self.startup_var = None
+        self.cpf_punctuation_var = None
         self._notifier = None
         self._header_icon = None
         self._ready = threading.Event()
@@ -122,6 +125,24 @@ class TkController:
                 cert_frame.grid_columnconfigure(1, weight=1)
                 self.cert_path_entry = cert_entry
 
+                ttk.Label(cert_frame, text="Use certificate for").grid(
+                    row=1, column=0, sticky=tk.W, padx=(0, 8), pady=(8, 4)
+                )
+                cert_targets = ttk.Frame(cert_frame)
+                cert_targets.grid(row=1, column=1, columnspan=2, sticky=tk.W, pady=(8, 4))
+                self.cert_env_vars = {}
+                for idx, env in enumerate(ENVIRONMENTS):
+                    var = tk.BooleanVar(value=False)
+                    self.cert_env_vars[env] = var
+                    ttk.Checkbutton(cert_targets, text=env, variable=var).grid(row=0, column=idx, padx=(0, 10))
+
+                ttk.Button(cert_frame, text="How to Generate Bundle?", command=self._show_bundle_help).grid(
+                    row=2, column=0, sticky=tk.W, pady=(6, 0)
+                )
+                ttk.Button(cert_frame, text="What is this?", command=self._show_bundle_info).grid(
+                    row=2, column=1, sticky=tk.W, padx=(8, 0), pady=(6, 0)
+                )
+
                 startup_frame = ttk.LabelFrame(scrollable, text="Startup", padding=10)
                 startup_frame.pack(fill=tk.X, expand=False, pady=(0, 10))
                 self.startup_var = tk.BooleanVar(value=False)
@@ -129,6 +150,15 @@ class TkController:
                     startup_frame,
                     text="Start with Windows",
                     variable=self.startup_var,
+                ).pack(anchor=tk.W)
+
+                generator_frame = ttk.LabelFrame(scrollable, text="Geradores", padding=10)
+                generator_frame.pack(fill=tk.X, expand=False, pady=(0, 10))
+                self.cpf_punctuation_var = tk.BooleanVar(value=True)
+                ttk.Checkbutton(
+                    generator_frame,
+                    text="CPF com pontuacao",
+                    variable=self.cpf_punctuation_var,
                 ).pack(anchor=tk.W)
 
                 form_container = ttk.Frame(scrollable)
@@ -191,6 +221,66 @@ class TkController:
         self._header_icon = ImageTk.PhotoImage(icon)
         return self._header_icon
 
+    def _show_text_window(self, title, message, width=86, height=16):
+        if self.root is None:
+            return
+
+        parent = self.config_window if self.config_window is not None and self.config_window.winfo_exists() else self.root
+        win = tk.Toplevel(parent)
+        win.title(title)
+        win.geometry("720x420")
+        win.transient(parent)
+
+        container = ttk.Frame(win, padding=8)
+        container.pack(fill=tk.BOTH, expand=True)
+
+        text_frame = ttk.Frame(container)
+        text_frame.pack(fill=tk.BOTH, expand=True)
+        scrollbar = ttk.Scrollbar(text_frame, orient=tk.VERTICAL)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        text = tk.Text(text_frame, wrap=tk.WORD, height=height, width=width, yscrollcommand=scrollbar.set)
+        text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.config(command=text.yview)
+
+        text.insert(tk.END, message)
+        text.bind("<Key>", lambda _event: "break")
+        text.focus_set()
+
+        def _copy_to_clipboard():
+            self.root.clipboard_clear()
+            self.root.clipboard_append(message)
+            self.root.update_idletasks()
+
+        button_row = ttk.Frame(container)
+        button_row.pack(fill=tk.X, pady=(8, 0))
+        ttk.Button(button_row, text="Copy", command=_copy_to_clipboard).pack(side=tk.RIGHT)
+        ttk.Button(button_row, text="Close", command=win.destroy).pack(side=tk.RIGHT, padx=(0, 8))
+
+        win.lift()
+        win.focus_force()
+
+    def _show_bundle_help(self):
+        message = (
+            "WSL steps to generate a certificate bundle:\n\n"
+            "1) Extract server chain:\n"
+            "   echo | openssl s_client -showcerts -connect login.bankly.com.br:443 -servername login.bankly.com.br \\\n"
+            "     2>/dev/null > chain.txt\n\n"
+            "2) Split certificates:\n"
+            "   awk 'BEGIN{c=0} /BEGIN CERTIFICATE/{c++} {print > (\"cert\" c \".pem\")}' chain.txt\n\n"
+            "3) Build bundle (edit paths as needed):\n"
+            "   cat /mnt/c/certs/[your-cert].crt cert*.pem > /mnt/c/certs/bundle.pem\n\n"
+            "Use C:\\certs\\bundle.pem as CA Bundle Path."
+        )
+        self._show_text_window("Generate Bundle", message)
+
+    def _show_bundle_info(self):
+        message = (
+            "Use this to build a CA bundle when the request only works with a private corporate CA. "
+            "The bundle is a single file that combines your private CA certificate with the public chain. "
+            "If you already have a working bundle, you do not need this."
+        )
+        self._show_text_window("Generate Bundle", message, height=8)
+
     def set_notifier(self, notifier):
         self._notifier = notifier
 
@@ -202,6 +292,26 @@ class TkController:
         def _generate():
             generate_uuid_to_clipboard(self.root)
             self._notify("UUID", "UUID copied to clipboard.")
+
+        self._call(_generate)
+
+    def _get_cpf_punctuation_setting(self):
+        if self.cpf_punctuation_var is not None:
+            return bool(self.cpf_punctuation_var.get())
+        if CONFIG_PATH.exists():
+            try:
+                data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+                return bool(data.get("cpf_with_punctuation", True))
+            except json.JSONDecodeError:
+                return True
+        return True
+
+    def generate_cpf(self):
+        def _generate():
+            with_punctuation = self._get_cpf_punctuation_setting()
+            generate_cpf_to_clipboard(self.root, with_punctuation=with_punctuation)
+            suffix = "with punctuation" if with_punctuation else "without punctuation"
+            self._notify("CPF", f"CPF copied to clipboard ({suffix}).")
 
         self._call(_generate)
 
@@ -235,9 +345,17 @@ class TkController:
             self.cert_path_entry.insert(0, cert_path)
         if self.startup_var is not None:
             self.startup_var.set(bool(data.get("auto_start", False)))
+        if self.cpf_punctuation_var is not None:
+            self.cpf_punctuation_var.set(bool(data.get("cpf_with_punctuation", True)))
 
         for env in ENVIRONMENTS:
             env_data = data.get(env, {})
+            uses_cert = env_data.get("uses_cert")
+            if uses_cert is None:
+                uses_cert = bool(data.get("cert_path"))
+            cert_var = self.cert_env_vars.get(env)
+            if cert_var is not None:
+                cert_var.set(bool(uses_cert))
             for field_key, _label in FIELDS:
                 value = env_data.get(field_key, "")
                 entry = self.entries.get(env, {}).get(field_key)
@@ -251,8 +369,12 @@ class TkController:
             data["cert_path"] = self.cert_path_entry.get().strip()
         if self.startup_var is not None:
             data["auto_start"] = bool(self.startup_var.get())
+        if self.cpf_punctuation_var is not None:
+            data["cpf_with_punctuation"] = bool(self.cpf_punctuation_var.get())
         for env in ENVIRONMENTS:
             data[env] = {}
+            cert_var = self.cert_env_vars.get(env)
+            data[env]["uses_cert"] = bool(cert_var.get()) if cert_var is not None else False
             for field_key, _label in FIELDS:
                 entry = self.entries.get(env, {}).get(field_key)
                 data[env][field_key] = entry.get().strip() if entry is not None else ""

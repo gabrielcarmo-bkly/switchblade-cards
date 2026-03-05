@@ -1,19 +1,23 @@
 {
-  "cert_path": "",
-  "auto_start": false,
+  "cert_path": "C:/certs/bundle_bankly.pem",
+  "auto_start": true,
+  "cpf_with_punctuation": true,
   "PRD": {
-    "url": "",
-    "client_id": "",
-    "client_secret": ""
+    "uses_cert": true,
+    "url": "https://login.bankly.com.br/connect/token",
+    "client_id": "a1e71149-0f7e-4e55-ac6b-5b4f43c8920b",
+    "client_secret": "2014e697-2444-0ea6-8965-c6ff7eac13a7"
   },
   "SDB": {
-    "url": "",
-    "client_id": "",
-    "client_secret": ""
+    "uses_cert": false,
+    "url": "https://login.sandbox.bankly.com.br/connect/token",
+    "client_id": "50f8785b-276c-4353-89aa-952c884df462",
+    "client_secret": "3fe32994-3a59-fa60-08e4-a3fc85281b92"
   },
   "STG": {
-    "url": "",
-    "client_id": "",
-    "client_secret": ""
+    "uses_cert": false,
+    "url": "https://login.staging.bankly.com.br/connect/token",
+    "client_id": "5936cd12-f39a-4e02-95f0-5a902ae4c53c",
+    "client_secret": "8199dc62-5735-fd58-e71e-60d65a61fd95"
   }
 }

@@ -23,6 +23,9 @@ def generate_token(env_name):
     config = _load_config()
     cert_path = (config.get("cert_path") or "").strip()
     env = config.get(env_name, {})
+    use_cert = env.get("uses_cert")
+    if use_cert is None:
+        use_cert = bool(cert_path)
     url = (env.get("url") or "").strip()
     client_id = (env.get("client_id") or "").strip()
     client_secret = (env.get("client_secret") or "").strip()
@@ -47,12 +50,12 @@ def generate_token(env_name):
         f"--data-urlencode 'client_secret={client_secret}'",
         "--data-urlencode 'grant_type=client_credentials'",
     ]
-    if cert_path:
+    if cert_path and use_cert:
         curl_parts.append(f"--cacert '{cert_path}'")
     curl_command = " ".join(curl_parts)
 
     try:
-        verify_path = cert_path if cert_path else certifi.where()
+        verify_path = cert_path if cert_path and use_cert else certifi.where()
         response = requests.post(url, headers=headers, data=data, timeout=15, verify=verify_path)
     except requests.RequestException as exc:
         log_exception(env_name, url, str(exc), curl_command=curl_command)
