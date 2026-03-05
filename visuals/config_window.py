@@ -3,6 +3,7 @@ import sys
 import threading
 import tkinter as tk
 import winreg
+from datetime import datetime, timedelta
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
@@ -22,6 +23,8 @@ FIELDS = (
     ("client_id", "Client ID"),
     ("client_secret", "Client Secret"),
 )
+TIME_ENTRY_KEY = "time_entry"
+TIME_ENTRY_TIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
 class TkController:
@@ -37,10 +40,13 @@ class TkController:
         self._header_icon = None
         self._time_entry_timer = None
         self._time_entry_window = None
+        self._time_entry_started_at = None
+        self._time_entry_delay_seconds = None
         self._ready = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
         self._ready.wait()
+        self._call(self._restore_time_entry_from_config)
 
     def _run(self):
         self.root = tk.Tk()
@@ -53,6 +59,78 @@ class TkController:
     def _call(self, func):
         if self.root is not None:
             self.root.after(0, func)
+
+    def _read_config_data(self):
+        if not CONFIG_PATH.exists():
+            return {}
+
+        try:
+            return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return {}
+
+    def _write_config_data(self, data):
+        CONFIG_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+    def _format_time_entry_time(self, value):
+        return value.strftime(TIME_ENTRY_TIME_FORMAT)
+
+    def _parse_time_entry_record(self, record):
+        if not isinstance(record, dict):
+            return None
+
+        started_at = record.get("started_at")
+        delay_seconds = record.get("delay_seconds", 3600)
+        if not started_at:
+            return None
+
+        try:
+            started_at_dt = datetime.strptime(started_at, TIME_ENTRY_TIME_FORMAT)
+        except (TypeError, ValueError):
+            return None
+
+        try:
+            delay_seconds = int(delay_seconds)
+        except (TypeError, ValueError):
+            delay_seconds = 3600
+
+        return started_at_dt, delay_seconds
+
+    def _clear_time_entry_record(self):
+        data = self._read_config_data()
+        if TIME_ENTRY_KEY in data:
+            data.pop(TIME_ENTRY_KEY, None)
+            self._write_config_data(data)
+
+    def _set_time_entry_record(self, started_at, delay_seconds):
+        data = self._read_config_data()
+        data[TIME_ENTRY_KEY] = {
+            "started_at": self._format_time_entry_time(started_at),
+            "delay_seconds": delay_seconds,
+        }
+        self._write_config_data(data)
+
+    def _get_time_entry_record(self):
+        data = self._read_config_data()
+        record = self._parse_time_entry_record(data.get(TIME_ENTRY_KEY))
+        if record is None:
+            return None
+
+        started_at, delay_seconds = record
+        deadline = started_at + timedelta(seconds=delay_seconds)
+        if deadline <= datetime.now():
+            self._clear_time_entry_record()
+            return None
+
+        return record
+
+    def _restore_time_entry_from_config(self):
+        record = self._get_time_entry_record()
+        if record is None:
+            return
+
+        started_at, delay_seconds = record
+        self._start_time_entry_timer(started_at, delay_seconds, notify=False)
 
     def show_config(self):
         def _show():
@@ -198,23 +276,70 @@ class TkController:
 
     def schedule_time_entry_reminder(self, delay_seconds=3600):
         def _schedule():
-            if self._time_entry_timer is not None and self._time_entry_timer.is_alive():
-                self._time_entry_timer.cancel()
+            now = datetime.now()
+            record = self._get_time_entry_record()
+            if record is not None:
+                previous_started, previous_delay = record
+                if not self._confirm_time_entry_replace(previous_started, now):
+                    return
 
-            def _fire():
-                self._call(self._show_time_entry_popup)
+                self._set_time_entry_record(now, delay_seconds)
+                self._start_time_entry_timer(now, delay_seconds, notify=True)
+                return
 
-            timer = threading.Timer(delay_seconds, _fire)
-            timer.daemon = True
-            self._time_entry_timer = timer
-            timer.start()
-            self._notify("Marcar Ponto", "Lembrete agendado para daqui a 1 hora.")
+            self._set_time_entry_record(now, delay_seconds)
+            self._start_time_entry_timer(now, delay_seconds, notify=True)
 
         self._call(_schedule)
+
+    def _confirm_time_entry_replace(self, previous_started, new_started):
+        previous_text = self._format_time_entry_time(previous_started)
+        new_text = self._format_time_entry_time(new_started)
+        message = (
+            "Ja existe um lembrete iniciado.\n\n"
+            f"Horario anterior: {previous_text}\n"
+            f"Novo horario: {new_text}\n\n"
+            "Deseja substituir pelo novo?"
+        )
+        return messagebox.askyesno("Marcar Ponto", message, parent=self.root)
+
+    def _start_time_entry_timer(self, started_at, delay_seconds, notify=True):
+        if self._time_entry_timer is not None and self._time_entry_timer.is_alive():
+            self._time_entry_timer.cancel()
+
+        deadline = started_at + timedelta(seconds=delay_seconds)
+        remaining = (deadline - datetime.now()).total_seconds()
+        if remaining <= 0:
+            self._time_entry_timer = None
+            self._time_entry_started_at = None
+            self._time_entry_delay_seconds = None
+            self._clear_time_entry_record()
+            return
+
+        self._time_entry_started_at = started_at
+        self._time_entry_delay_seconds = delay_seconds
+
+        def _fire():
+            self._clear_time_entry_record()
+            self._time_entry_timer = None
+            self._time_entry_started_at = None
+            self._time_entry_delay_seconds = None
+            self._call(self._show_time_entry_popup)
+
+        timer = threading.Timer(remaining, _fire)
+        timer.daemon = True
+        self._time_entry_timer = timer
+        timer.start()
+        if notify:
+            self._notify("Marcar Ponto", "Lembrete agendado para daqui a 1 hora.")
 
     def _show_time_entry_popup(self):
         if self.root is None:
             return
+
+        self._clear_time_entry_record()
+        self._time_entry_started_at = None
+        self._time_entry_delay_seconds = None
 
         if self._time_entry_window is not None and self._time_entry_window.winfo_exists():
             self._time_entry_window.lift()
@@ -442,6 +567,8 @@ class TkController:
                     entry.insert(0, value)
 
     def _save_config(self):
+        existing = self._read_config_data()
+        time_entry = existing.get(TIME_ENTRY_KEY)
         data = {}
         if self.cert_path_entry is not None:
             data["cert_path"] = self.cert_path_entry.get().strip()
@@ -457,7 +584,10 @@ class TkController:
                 entry = self.entries.get(env, {}).get(field_key)
                 data[env][field_key] = entry.get().strip() if entry is not None else ""
 
-        CONFIG_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        if time_entry is not None:
+            data[TIME_ENTRY_KEY] = time_entry
+
+        self._write_config_data(data)
         self._apply_startup_setting(bool(data.get("auto_start", False)))
 
     def _save_and_close(self):

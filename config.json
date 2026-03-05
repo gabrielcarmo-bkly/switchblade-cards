@@ -19,5 +19,9 @@
     "url": "https://login.staging.bankly.com.br/connect/token",
     "client_id": "5936cd12-f39a-4e02-95f0-5a902ae4c53c",
     "client_secret": "8199dc62-5735-fd58-e71e-60d65a61fd95"
+  },
+  "time_entry": {
+    "started_at": "2026-03-05 13:19:23",
+    "delay_seconds": 3600
   }
 }
